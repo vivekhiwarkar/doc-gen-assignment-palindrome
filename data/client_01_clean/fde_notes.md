@@ -25,8 +25,18 @@ Accounts are listed per holder. A jointly-held account is recorded under each ho
 Not every field is populated for every account: a field may be blank where a figure was not captured
 at snapshot time, and an account may carry a status.
 
+
 ## Figures a person finalises
 
 Some numbers are not ours to produce in the draft. The capital gains tax on any disposal, and the
 platform and adviser fee rates, are confirmed or inserted by a person before the report goes to the
-client. The draft should not estimate or invent them.
+client, so the draft must not estimate or invent them. We do need a way to flag these clearly for
+manual review in the output, so whoever finalises the report can see exactly what is outstanding and
+fill it in. How you mark them is your call, but a number we made up must never reach the client, and
+the gaps must not be hidden.
+
+## The FCA line
+
+There is a standard line about FCA authorisation that has to appear in the report word for word. I
+have already put it into the template config as static text, so leave it exactly as it is: do not
+paraphrase it, and do not let the model rewrite it when you change how the sections are generated.

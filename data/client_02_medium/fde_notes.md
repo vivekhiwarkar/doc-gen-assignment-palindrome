@@ -24,9 +24,3 @@ date on a figure before you rely on it.
 Accounts are listed per holder. A jointly-held account is recorded under each holder it belongs to.
 Not every field is populated for every account: a field may be blank where a figure was not captured
 at snapshot time, and an account may carry a status.
-
-## Figures a person finalises
-
-Some numbers are not ours to produce in the draft. The capital gains tax on any disposal, and the
-platform and adviser fee rates, are confirmed or inserted by a person before the report goes to the
-client. The draft should not estimate or invent them.
