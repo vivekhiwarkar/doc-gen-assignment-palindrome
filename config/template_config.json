@@ -1,6 +1,19 @@
 {
   "document_title": "Investment Advice Report",
-  "global_instructions": "You are writing sections of a financial advice report addressed to the client. Write in clear British English, in the first person ('we'). Output only the text for the section itself, with no extra headings or commentary.",
+
+  "global_instructions": "You are drafting sections of a financial advice report addressed to the client, on behalf of the advising firm. Rules that apply to every section:\n- Write in clear British English, in the first person plural ('we'), addressing the client as 'you'.\n- Use ONLY the facts provided to you. Never introduce figures, dates, holdings, or products that are not in the facts.\n- When you refer to a figure that is listed under `manual_review`, represent it inline with a marker in the exact form [MANUAL REVIEW: <what is needed>] (plain text, no backticks or code formatting) rather than a number. Never invent, estimate, or approximate these figures, and never hide the gap. Do not narrate the review process itself (do not write phrases like 'we will mark this for manual review' or 'is represented as'); just place the marker where the figure would go. Only use a marker for figures that are actually in `manual_review`; a figure you can compute from the facts (for example a received amount minus a committed amount) must be stated as a number, not marked.\n- Never mention anything listed under `out_of_scope`; those are future aspirations the client asked not to action.\n- Do not repeat content that belongs to another section; write only what this section's task asks for.\n- Output only the prose for the section itself: no headings, labels, preamble, or sign-off.",
+
+  "source_policy": {
+    "structured_db_match": "client_data_db.json",
+    "context_include_patterns": ["meeting_notes", "report_request"],
+    "exclude_patterns": ["market_update", "portfolio_pack", "statement_summary", "fde_notes", "template_spec", ".png", ".jpg", ".jpeg"],
+    "notes": "client_data_db.json is parsed structurally, not dumped as prose. Meeting notes and the report request are the client-specific narrative. Market updates and portfolio packs are firm-wide commentary carrying illustrative aggregate figures that must never be read as this client's holdings, so they are excluded. Statement PNGs only duplicate the Holloway rows of the DB, so they are excluded as redundant. fde_notes.md and template_spec.md are internal instructions for whoever configures the report, not client inputs. An unrecognised file is excluded from context and logged for review."
+  },
+
+  "extraction": {
+    "prompt": "Read the client's documents and the parsed account data, then return a SINGLE JSON object reconciling them into the facts needed to draft an advice report. Use this exact shape:\n{\n  \"objectives\": string,            // high-level circumstances and goals (e.g. retired, long-term growth, income needs). NO transaction amounts.\n  \"risk_profile\": string|null,     // the agreed risk profile as stated (e.g. '4 (moderate)').\n  \"report_scope\": string,          // which of the client's accounts this report covers, from the report request's 'Accounts covered'.\n  \"disposal\": boolean,             // true if any EXISTING investment is being sold or disposed of. Moving cash into a wrapper is NOT a disposal.\n  \"disposal_detail\": string|null,  // what is being sold, if anything.\n  \"recommendation\": string,        // what the client should do and why, including the amounts involved. Ground every amount in the sources.\n  \"amounts\": [ { \"label\": string, \"value\": number|null, \"currency\": string, \"note\": string|null } ],\n  \"out_of_scope\": [string],        // aspirations explicitly deferred ('not for today'): gifting, school fees, charity, holidays, property, etc.\n  \"sensitivities\": [string]        // anything to handle with care, e.g. a recent bereavement or an inheritance from a late relative.\n}\n\nReconciliation rules:\n- The parsed account data is the system of record for which accounts exist, their values and valuation dates. Do not restate account balances as amounts unless they are part of the recommended action.\n- Figures can conflict: a live figure quoted in the meeting note may be more recent than a stale valuation date in the account data, but is usually approximate. When you have an approximate live figure (e.g. 'a little over £45,000'), put that number in `value` and record in `note` that it is approximate and the exact figure is confirmed at the point of sale. Only set `value` to null when there is genuinely no figure at all. State the basis of any figure in its `note`.\n- Money that is committed elsewhere (e.g. a loan repayment) must be excluded from the investable amount, with the reason noted. When the investable amount is simply a received amount minus a committed amount, COMPUTE it and give the numeric value; only leave a value null when it is genuinely unknown or unconfirmed (such as a live figure the adviser could not pin down).\n- Money that is contingent or not yet received (e.g. a deferred earnout) must NOT be treated as available to invest; record it in `amounts` with a note that it is contingent/not yet received, or in `out_of_scope`.\n- Never produce a capital gains tax figure or any platform/advice fee rate; those are finalised by a person."
+  },
+
   "sections": [
     {
       "id": "introduction",
@@ -9,7 +22,9 @@
       "template": "Further to our recent discussions, we are writing to set out our advice in relation to <<scope>>. This advice is based on the information currently available to us.\n\nThis firm is authorised and regulated by the Financial Conduct Authority.",
       "placeholders": {
         "scope": {
-          "prompt": "Say which of the client's accounts this report relates to."
+          "kind": "generated",
+          "context_fields": ["report_scope"],
+          "prompt": "Return ONLY a short noun phrase naming the account type(s) this report covers, drawn from `report_scope` (e.g. 'your Stocks & Shares ISA', or 'your ISAs, your joint General Investment Account and your SIPPs'). It will be inserted mid-sentence after the words 'in relation to', so do not write a full sentence or preamble such as 'This report covers', and do not end with a full stop. Keep the normal capitalisation of proper nouns such as platform names (e.g. Holloway, Brightwell). Do not list balances."
         }
       }
     },
@@ -20,10 +35,13 @@
       "template": "<<summary>>\n\nThe accounts covered by this report are as follows:\n\n<<holdings_table>>",
       "placeholders": {
         "summary": {
-          "prompt": "Summarise the client's objectives and circumstances."
+          "kind": "generated",
+          "context_fields": ["objectives", "risk_profile", "sensitivities"],
+          "prompt": "Write a short, high-level paragraph summarising the client's circumstances and objectives from `objectives` and `risk_profile`. Keep it high level: do NOT include specific transaction amounts, top-ups, sale proceeds, new money, or tax figures (those belong in later sections). If `sensitivities` mentions a bereavement or inheritance, acknowledge it briefly and with care."
         },
         "holdings_table": {
-          "prompt": "List the client's accounts and their values as a markdown table."
+          "kind": "computed",
+          "compute": "holdings_table"
         }
       }
     },
@@ -34,18 +52,22 @@
       "template": "We recommend the following:\n\n<<recommendation>>",
       "placeholders": {
         "recommendation": {
-          "prompt": "Describe what the client should do with their investments, and why."
+          "kind": "generated",
+          "context_fields": ["recommendation", "amounts", "out_of_scope"],
+          "prompt": "Set out what the client should do and why, using `recommendation` and `amounts`. Include the amounts involved. Where money is committed elsewhere or is contingent/not yet received, make clear it is not being invested now and why. Keep this section to the actions and the money that funds them; the fees, tax, and any unconfirmed balances each have their own dedicated section, so do not restate them here. If an amount's note says it is approximate, present it as 'approximately £X' and add that the exact figure will be confirmed at the point of sale; do not invent a [MANUAL REVIEW] marker for an approximate amount (markers belong only to the dedicated sections)."
         }
       }
     },
     {
       "id": "tax_implications",
       "title": "Tax Implications",
-      "use_if": "Include this section when the recommendation involves selling investments that could be taxable.",
+      "use_if": { "fact": "disposal", "equals": true },
       "template": "<<cgt_statement>>",
       "placeholders": {
         "cgt_statement": {
-          "prompt": "Estimate the capital gains tax arising from the recommended sales. If you do not have exact figures, give your best approximate estimate so the client has a number to work with."
+          "kind": "generated",
+          "context_fields": ["disposal_detail", "manual_review"],
+          "prompt": "State that the disposal described in `disposal_detail` may create a capital gains tax liability, assessed against the annual exempt amount. Do NOT estimate the tax: represent the figure with its `[MANUAL REVIEW: ...]` marker from `manual_review`."
         }
       }
     },
@@ -56,7 +78,9 @@
       "template": "<<fees>>",
       "placeholders": {
         "fees": {
-          "prompt": "Set out the ongoing fees and charges that apply to the client's investments."
+          "kind": "generated",
+          "context_fields": ["manual_review"],
+          "prompt": "Set out the ongoing fees and charges that apply: the platform charge and the ongoing advice charge. Both rates are finalised by a person, so represent each with its `[MANUAL REVIEW: ...]` marker from `manual_review` rather than stating a percentage."
         }
       }
     },
@@ -64,12 +88,8 @@
       "id": "conclusion",
       "title": "Conclusion",
       "use_if": "always",
-      "template": "<<risk_warning>>\n\nIf you are happy to proceed with our recommendations, please let us know and we will implement them for you.",
-      "placeholders": {
-        "risk_warning": {
-          "prompt": "Add the standard risk warning about investments."
-        }
-      }
+      "template": "The value of investments can fall as well as rise and you may get back less than you invest. Past performance is not a guide to future returns.\n\nIf you are happy to proceed with our recommendations, please let us know and we will implement them for you.",
+      "placeholders": {}
     }
   ]
 }

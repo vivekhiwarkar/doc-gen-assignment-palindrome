@@ -7,6 +7,7 @@ dependencies = [
     "openai>=1.40",
     "python-docx>=1.1",
     "python-dotenv>=1.0",
+    "pydantic>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -25,3 +26,9 @@ packages = ["src/agent_pipeline", "src/document_formatter"]
 
 [tool.ruff]
 src = ["src"]
+
+[tool.pytest.ini_options]
+# evals/ lives at the repo root (it is the deliverable eval, not a src package),
+# so add the root to the path for imports during tests.
+pythonpath = ["."]
+testpaths = ["tests"]
