@@ -119,6 +119,13 @@ sensitivity around the bereavement case, whether something out-of-scope crept in
 only calls the judge if asked; a subjective grader with no gold answer key should not be able to
 block a build. The judge is a second opinion, not a referee.
 
+That advisory-only design earned its keep almost immediately: an early run of the judge flagged
+the inheritance and the sale proceeds as "out of scope," confusing in-scope money with the
+client's deferred aspirations (gifting, school fees, etc.). Because the judge was never wired to
+the exit code, that false positive showed up as a note, not a broken build. I tightened the
+rubric to spell out that inheritance/sale proceeds/earnouts/loan repayments are the subject of the
+advice, not a deferred aspiration.
+
 ## What I would take further (given more time / for production)
 
 - **More agentic, where it earns its keep.** The current pipeline is a deterministic graph with

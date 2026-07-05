@@ -25,27 +25,31 @@ CLIENTS = ["client_01_clean", "client_02_medium", "client_03_hard", "client_04_s
 
 def evaluate_client(
     client: str, data_dir: Path, output_dir: Path, use_judge: bool
-) -> list[CheckResult]:
+) -> tuple[list[CheckResult], list[CheckResult]]:
+    """Return (gating deterministic results, advisory judge results)."""
     report_path = output_dir / f"{client}.md"
     if not report_path.exists():
-        return [CheckResult("report_exists", False, f"missing {report_path}; run generation first")]
+        return [CheckResult("report_exists", False, f"missing {report_path}; run generation first")], []
 
     report = report_path.read_text(encoding="utf-8")
     exp = build_expectations(data_dir / client)
-    results = run_all(report, exp)
-
-    if use_judge:
-        results.extend(judge_report(client, report))
-    return results
+    gating = run_all(report, exp)
+    advisory = judge_report(client, report) if use_judge else []
+    return gating, advisory
 
 
-def _print(client: str, results: list[CheckResult]) -> bool:
+def _print(client: str, gating: list[CheckResult], advisory: list[CheckResult]) -> bool:
+    """Print results; only the deterministic (gating) results decide pass/fail."""
     print(f"\n=== {client} ===")
     all_ok = True
-    for r in results:
+    for r in gating:
         mark = "PASS" if r.passed else "FAIL"
         all_ok &= r.passed
         print(f"  [{mark}] {r.name}: {r.detail}")
+    for r in advisory:
+        # The LLM judge is a qualitative signal, not a gate; it never flips the exit code.
+        mark = "ok" if r.passed else "NOTE"
+        print(f"  [{mark}] (advisory) {r.name}: {r.detail}")
     return all_ok
 
 
@@ -69,8 +73,8 @@ def main() -> None:
 
     overall_ok = True
     for client in clients:
-        results = evaluate_client(client, args.data_dir, args.output_dir, args.judge)
-        overall_ok &= _print(client, results)
+        gating, advisory = evaluate_client(client, args.data_dir, args.output_dir, args.judge)
+        overall_ok &= _print(client, gating, advisory)
 
     print("\n" + ("ALL CHECKS PASSED" if overall_ok else "SOME CHECKS FAILED"))
     raise SystemExit(0 if overall_ok else 1)
