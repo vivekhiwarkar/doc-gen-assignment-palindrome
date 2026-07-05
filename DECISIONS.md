@@ -95,13 +95,31 @@ leverage call; the obvious cheap upgrade is a stronger model there only (the cod
 per-call model). I left the default as shipped and documented the lever rather than quietly
 raising everyone's bill.
 
-## What I would take further (given more time / for production)
+### 10. How this pipeline gets evaluated
+There are no gold outputs to diff against, so a suite that just re-checks the pipeline's own
+`ClientFacts` would be circular — it would validate that the code agrees with itself, not that it
+read the client correctly. So `evals/oracle.py` derives its expectations independently, straight
+from the raw source files (`client_data_db.json`, the report request, the meeting notes) — the
+same inputs the pipeline sees, re-read from scratch rather than trusted secondhand. It computes
+things like the de-duplicated account count, whether a disposal is actually happening, which
+balances are genuinely unconfirmed, and which figures from the excluded firm-wide documents must
+never leak into a client's report.
 
-- **An independent eval harness.** There are no gold outputs, so the plan is an oracle that
-  re-reads the raw client data (not the pipeline's own facts, which would be circular) and
-  asserts general invariants — section inclusion, joint-account de-dup, verbatim FCA/risk lines,
-  no invented CGT/fees, no platform leakage, unconfirmed balances flagged — plus an advisory LLM
-  judge for tone/sensitivity that never gates the build on its own. Not yet built in this pass.
+`evals/checks.py` then asserts general invariants against a generated report, not fixed values:
+the right sections are present or absent, joint accounts appear once in the holdings table, the
+FCA/risk-warning lines are verbatim, CGT and fee figures are markers rather than numbers, and none
+of the platform-wide aggregate figures show up. Because every check reads the client's own data
+rather than a hardcoded expectation, the same suite is meant to hold on the held-out client set
+without modification — that was the point of building it this way rather than eyeballing four
+reports.
+
+I also added `evals/judge.py`, an LLM judge for the things invariants can't capture — tone,
+sensitivity around the bereavement case, whether something out-of-scope crept in — but kept it
+**advisory only**. `evals/evaluate.py` runs the deterministic checks as the pass/fail gate and
+only calls the judge if asked; a subjective grader with no gold answer key should not be able to
+block a build. The judge is a second opinion, not a referee.
+
+## What I would take further (given more time / for production)
 
 - **More agentic, where it earns its keep.** The current pipeline is a deterministic graph with
   one reasoning step. The highest-value next step is a *verification* agent that re-reads the
@@ -135,9 +153,11 @@ raising everyone's bill.
 
 - Prose quality depends on `gpt-4o-mini`; occasional mild verbosity remains. Facts, sections,
   and figures are enforced; wording is not.
-- No automated eval or test suite yet in this pass, and reports haven't been generated/checked
-  against this config yet either — nothing here is asserted, only designed. See "what I would
-  take further".
+- The eval checks invariants derived from the raw data, not full semantic correctness of the
+  generated prose; the advisory judge only partially covers that gap. There is also no
+  deterministic unit-test suite yet for the parsing/policy/rendering code itself — only the
+  end-to-end eval — so a regression in an individual function could still slip through if it
+  doesn't happen to violate one of the eval's invariants.
 - Curation matches sources by filename pattern. That fits the given (and, per the brief,
   held-out) data; a genuinely new source type needs a `source_policy` entry, and the log warns
   when one appears.
