@@ -67,6 +67,7 @@ def run_all(report: str, exp: Expectations) -> list[CheckResult]:
         _cgt_flagged_if_disposal(secs, exp),
         _unconfirmed_balance_flagged(report, exp),
         _no_platform_leakage(report, exp),
+        _manual_review_not_narrated(report),
     ]
 
 
@@ -143,4 +144,27 @@ def _no_platform_leakage(report: str, exp: Expectations) -> CheckResult:
         "no_platform_leakage",
         ok,
         f"leaked_figures={sorted(leaked_figures)}, leaked_names={sorted(leaked_names)}",
+    )
+
+
+_NARRATION_WORDS = re.compile(r"\b(represent\w*|mark\w*)\b", re.IGNORECASE)
+
+
+def _manual_review_not_narrated(report: str) -> CheckResult:
+    """A marker must stand in for the figure, not be narrated ('is represented as [...]').
+
+    Caught by reading the actual generated reports, not by inspecting the prompt: the
+    instruction told the model to 'represent' figures with a marker and separately banned
+    narrating the process, and the model kept using 'represent'/'represented' right next to
+    the marker anyway. This checks the words that actually leaked, near every marker.
+    """
+    offenders: set[str] = set()
+    for m in re.finditer(re.escape("[MANUAL REVIEW"), report):
+        window = report[max(0, m.start() - 80) : m.start()]
+        offenders.update(w.lower() for w in _NARRATION_WORDS.findall(window))
+    ok = not offenders
+    return CheckResult(
+        "manual_review_not_narrated",
+        ok,
+        f"narration words near a marker={sorted(offenders)}" if offenders else "markers stand in for the figure, not narrated",
     )

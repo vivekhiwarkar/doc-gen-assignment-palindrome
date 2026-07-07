@@ -126,6 +126,36 @@ the exit code, that false positive showed up as a note, not a broken build. I ti
 rubric to spell out that inheritance/sale proceeds/earnouts/loan repayments are the subject of the
 advice, not a deferred aspiration.
 
+## 11. 9/9 on every client was not the same as the reports being right
+
+After the suite above hit 9/9 across all four clients, I re-read the generated reports directly
+against each client's source data instead of trusting the green suite, and found two live
+defects the 9 checks did not catch:
+
+- **The client_04 earnout disappeared entirely.** The extraction prompt let the model file
+  contingent money (the £400,000 deferred earnout) into `amounts` *or* `out_of_scope`.
+  `global_instructions` bans mentioning anything in `out_of_scope`, so when the model chose that
+  path, the earnout — real, material, and the client's own money — vanished from the report with
+  no trace, on the one client I'd specifically called out as "where getting it wrong matters
+  most." The fix removes the `out_of_scope` escape hatch for contingent/committed money
+  entirely: it must go in `amounts`, and `out_of_scope` is now restricted, in both the schema
+  comment and the reconciliation rules, to genuine deferred personal aspirations.
+- **The manual-review marker was narrated in 3 of 4 reports despite an explicit ban.** The
+  instruction told the model to *"represent"* a flagged figure with a marker, then separately
+  forbade the phrase "is represented as" — priming the exact word it then banned. Every report
+  with an in-prose marker used "is represented as [MANUAL REVIEW: ...]" regardless. Fixed by
+  rewording to *insert* the marker in place of the figure, explicitly banning "represent"/"mark"
+  near it, and adding a right/wrong example lifted from the actual failing output.
+
+I added `evals/checks.py::_manual_review_not_narrated` so the second defect is now a gating
+check instead of something that only turns up on a close read. The first is a fact-level
+omission, not a text pattern — it's the concrete case behind the "fact-level eval" item below,
+and the reason that item is no longer purely hypothetical. The suite is now 40/40 (10 checks ×
+4 clients) after both fixes and a full regeneration of `outputs/`. The lesson I'm keeping: a
+passing suite tells you the invariants you thought to write are satisfied, not that you thought
+of the right invariants — the only way to find the second kind of gap is to keep reading the
+actual output, even after the suite is green.
+
 ## What I would take further (given more time / for production)
 
 - **More agentic, where it earns its keep.** The current pipeline is a deterministic graph with
